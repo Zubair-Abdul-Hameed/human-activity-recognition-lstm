@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 
 
+# ---------------- EARLY STOPPING ----------------
 class EarlyStopping:
     def __init__(self, patience=5):
         self.patience = patience
@@ -13,25 +14,31 @@ class EarlyStopping:
         if val_loss < self.best_loss:
             self.best_loss = val_loss
             self.counter = 0
+            return True  # improvement happened
         else:
             self.counter += 1
             if self.counter >= self.patience:
                 self.early_stop = True
+            return False
 
 
+# ---------------- TRAIN FUNCTION ----------------
 def train_model(model, train_loader, val_loader, device, epochs=50, lr=0.001):
 
     criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=1e-4)
+
     early_stopping = EarlyStopping(patience=5)
+
+    best_model_path = "models/best_model.pt"
 
     model.to(device)
 
     for epoch in range(epochs):
 
-        # ---------------- TRAIN ----------------
+        # ================= TRAIN =================
         model.train()
-        train_loss = 0
+        train_loss = 0.0
         train_correct = 0
         total = 0
 
@@ -45,16 +52,20 @@ def train_model(model, train_loader, val_loader, device, epochs=50, lr=0.001):
             loss.backward()
             optimizer.step()
 
-            train_loss += loss.item()
+            # loss (weighted for proper averaging)
+            train_loss += loss.item() * X.size(0)
+
             preds = torch.argmax(outputs, dim=1)
             train_correct += (preds == y).sum().item()
             total += y.size(0)
 
+        train_loss /= total
         train_acc = train_correct / total
 
-        # ---------------- VAL ----------------
+
+        # ================= VALIDATION =================
         model.eval()
-        val_loss = 0
+        val_loss = 0.0
         val_correct = 0
         total = 0
 
@@ -65,22 +76,43 @@ def train_model(model, train_loader, val_loader, device, epochs=50, lr=0.001):
                 outputs = model(X)
                 loss = criterion(outputs, y)
 
-                val_loss += loss.item()
+                val_loss += loss.item() * X.size(0)
+
                 preds = torch.argmax(outputs, dim=1)
                 val_correct += (preds == y).sum().item()
                 total += y.size(0)
 
+        val_loss /= total
         val_acc = val_correct / total
 
-        print(f"Epoch {epoch+1}")
-        print(f"Train Loss: {train_loss:.4f} | Train Acc: {train_acc:.4f}")
-        print(f"Val Loss: {val_loss:.4f} | Val Acc: {val_acc:.4f}")
-        print("-" * 50)
 
-        early_stopping(val_loss)
+        # ================= LOGGING =================
+        current_lr = optimizer.param_groups[0]["lr"]
+
+        print(
+            f"Epoch {epoch+1:2d} | "
+            f"Train loss: {train_loss:.4f} | "
+            f"Train acc: {train_acc*100:.1f}% | "
+            f"Val loss: {val_loss:.4f} | "
+            f"Val acc: {val_acc*100:.1f}%"
+        )
+
+        print(f"  current lr: {current_lr:.6f}")
+
+
+        # ================= EARLY STOPPING + SAVE BEST MODEL =================
+        is_best = early_stopping(val_loss)
+
+        if is_best:
+            torch.save(model.state_dict(), best_model_path)
+            print("  ✓ Best model saved")
+
 
         if early_stopping.early_stop:
             print("Early stopping triggered")
             break
 
+
+    # ================= LOAD BEST MODEL BEFORE RETURN =================
+    model.load_state_dict(torch.load(best_model_path))
     return model

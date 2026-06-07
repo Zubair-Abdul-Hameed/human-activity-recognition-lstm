@@ -2,13 +2,15 @@ import torch.nn as nn
 
 
 class LSTM_HAR(nn.Module):
-    def __init__(self, input_size=6, hidden_size=64, num_classes=6):
-        super().__init__()
+    def __init__(self, input_size=6, hidden_size=128, num_classes=6):
+        super().__init__() #runs parent's (nn.Module) __init__ code.
 
         self.lstm = nn.LSTM(
             input_size=input_size,
             hidden_size=hidden_size,
-            batch_first=True
+            num_layers=2,
+            batch_first=True,
+            dropout=0.3
         )
 
         self.dropout = nn.Dropout(0.3)
