@@ -89,6 +89,8 @@ The model classifies the following human activities:
 ---
 
 ## 📁 Project Structure
+
+```text
 src/
 ├── data_loader.py
 ├── dataset.py
@@ -98,7 +100,7 @@ src/
 ├── preprocessing.py
 ├── plot_results.py
 main.py
-
+```
 
 
 ---
@@ -108,11 +110,11 @@ main.py
 - pip install -r requirements.txt
 - python main.py
 
-##📌 Notes
+## 📌 Notes
 - Best model is saved during training (models/best_model.pt)
 - Training uses early stopping to prevent overfitting
 - All preprocessing is done using training statistics only (no data leakage)
-##📌 Future Improvements
+## 📌 Future Improvements
 - Hyperparameter tuning (hidden size, layers, dropout)
 - Attention-based LSTM
 - Real-time inference on mobile sensor data
