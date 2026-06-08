@@ -2,7 +2,7 @@ import torch.nn as nn
 
 
 class LSTM_HAR(nn.Module):
-    def __init__(self, input_size=6, hidden_size=128, num_classes=6):
+    def __init__(self, input_size=9, hidden_size=128, num_classes=6):
         super().__init__() #runs parent's (nn.Module) __init__ code.
 
         self.lstm = nn.LSTM(

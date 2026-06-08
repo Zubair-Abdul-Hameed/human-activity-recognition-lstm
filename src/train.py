@@ -14,7 +14,7 @@ class EarlyStopping:
         if val_loss < self.best_loss:
             self.best_loss = val_loss
             self.counter = 0
-            return True  # improvement happened
+            return True
         else:
             self.counter += 1
             if self.counter >= self.patience:
@@ -26,11 +26,33 @@ class EarlyStopping:
 def train_model(model, train_loader, val_loader, device, epochs=50, lr=0.001):
 
     criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=1e-4)
+
+    optimizer = torch.optim.Adam(
+        model.parameters(),
+        lr=lr,
+        weight_decay=1e-4
+    )
+
+    # ADAPTIVE LR SCHEDULER (NEW)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer,
+        mode='min',
+        factor=0.5,
+        patience=2
+    )
 
     early_stopping = EarlyStopping(patience=5)
 
     best_model_path = "models/best_model.pt"
+
+    previous_lr = optimizer.param_groups[0]["lr"]
+
+    history = {
+        "train_loss": [],
+        "val_loss": [],
+        "train_acc": [],
+        "val_acc": []
+    }
 
     model.to(device)
 
@@ -50,9 +72,12 @@ def train_model(model, train_loader, val_loader, device, epochs=50, lr=0.001):
 
             optimizer.zero_grad()
             loss.backward()
+
+            # GRADIENT CLIPPING (IMPORTANT FIX)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+
             optimizer.step()
 
-            # loss (weighted for proper averaging)
             train_loss += loss.item() * X.size(0)
 
             preds = torch.argmax(outputs, dim=1)
@@ -61,7 +86,6 @@ def train_model(model, train_loader, val_loader, device, epochs=50, lr=0.001):
 
         train_loss /= total
         train_acc = train_correct / total
-
 
         # ================= VALIDATION =================
         model.eval()
@@ -85,6 +109,17 @@ def train_model(model, train_loader, val_loader, device, epochs=50, lr=0.001):
         val_loss /= total
         val_acc = val_correct / total
 
+        # ================= LR SCHEDULER STEP =================
+        scheduler.step(val_loss)
+        current_lr = optimizer.param_groups[0]["lr"]
+
+        if current_lr != previous_lr:
+            print(
+                f"  ↓ Learning rate reduced: "
+                f"{previous_lr:.6f} -> {current_lr:.6f}"
+            )
+
+        previous_lr = current_lr
 
         # ================= LOGGING =================
         current_lr = optimizer.param_groups[0]["lr"]
@@ -99,20 +134,24 @@ def train_model(model, train_loader, val_loader, device, epochs=50, lr=0.001):
 
         print(f"  current lr: {current_lr:.6f}")
 
+        history["train_loss"].append(train_loss)
+        history["val_loss"].append(val_loss)
 
-        # ================= EARLY STOPPING + SAVE BEST MODEL =================
+        history["train_acc"].append(train_acc)
+        history["val_acc"].append(val_acc)
+
+        # ================= SAVE BEST MODEL =================
         is_best = early_stopping(val_loss)
 
         if is_best:
             torch.save(model.state_dict(), best_model_path)
             print("  ✓ Best model saved")
 
-
         if early_stopping.early_stop:
             print("Early stopping triggered")
             break
+    
 
-
-    # ================= LOAD BEST MODEL BEFORE RETURN =================
+    # ================= LOAD BEST MODEL =================
     model.load_state_dict(torch.load(best_model_path))
-    return model
+    return model, history

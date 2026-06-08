@@ -7,7 +7,7 @@ class StandardScaler3D:
     (samples, timesteps, features)
 
     Example:
-    (7352, 128, 6)
+    (7352, 128, 9)
     """
 
     def __init__(self):
